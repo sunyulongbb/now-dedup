@@ -4,19 +4,16 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="面向 Elasticsearch entity 索引的重复知识候选检测工具">
-  <title>重复知识检测 · DataLens</title>
+  <title>重复知识检测 · 知识数据处理工作台</title>
   <link rel="stylesheet" href="/app.css">
 </head>
 <body>
   <header class="topbar">
-    <a class="brand" href="/" aria-label="DataLens 首页"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M7 5.5h10M7 12h10M7 18.5h6"/><circle cx="5" cy="5.5" r="1"/><circle cx="5" cy="12" r="1"/><circle cx="5" cy="18.5" r="1"/></svg></span><span><strong>DataLens</strong><small>知识质量工作台</small></span></a>
-    <div class="topbar-meta"><span class="environment"><i></i>本地环境</span><span class="divider"></span><span>知识治理</span></div>
+    <a class="brand" href="/" aria-label="知识数据处理工作台首页"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M7 5.5h10M7 12h10M7 18.5h6"/><circle cx="5" cy="5.5" r="1"/><circle cx="5" cy="12" r="1"/><circle cx="5" cy="18.5" r="1"/></svg></span><span><strong>知识数据处理工作台</strong><small>Knowledge Operations</small></span></a>
+    <div class="topbar-meta"><button id="history" class="history-button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v15H4zM8 3v4M16 3v4M8 11h8M8 15h5"/></svg>处理记录</button><span class="divider"></span><span class="environment"><i></i>本地环境</span><span class="divider"></span><span>知识治理</span></div>
   </header>
-  <main>
-    <section class="page-heading">
-      <div><div class="breadcrumb">质量检测 <span>/</span> 重复知识</div><h1>重复知识检测</h1><p>定位同一知识类型下中文名称完全相同的候选项，帮助你更高效地完成数据核查。</p></div>
-      <div class="safe-note"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 5 6v5c0 4.6 2.9 8.1 7 10 4.1-1.9 7-5.4 7-10V6l-7-3Z"/><path d="m9 12 2 2 4-4"/></svg><span><strong>只读检测</strong><small>不会修改或删除知识</small></span></div>
-    </section>
+  <main class="workspace">
+    <aside class="control-column">
     <section class="panel config-panel">
       <div class="panel-heading"><div class="step">1</div><div><h2>配置检测范围</h2><p>连接 Elasticsearch，选择要检测的知识类型</p></div><span id="connectionState" class="connection-state"><i></i>等待连接</span></div>
       <div class="config">
@@ -31,14 +28,26 @@
       </div>
     </section>
     <div id="message" class="message hidden" role="alert"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v6M12 17h.01"/></svg><span></span></div>
+    </aside>
+    <section class="content-column">
+    <section class="page-heading">
+      <div><div class="breadcrumb">知识治理 <span>/</span> 质量检测 <span>/</span> 重复知识</div><h1>重复知识检测</h1><p>扫描同一知识类型下名称完全相同的候选项，并通过安全选举与备份完成数据治理。</p></div>
+      <div class="safe-note"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 5 6v5c0 4.6 2.9 8.1 7 10 4.1-1.9 7-5.4 7-10V6l-7-3Z"/><path d="m9 12 2 2 4-4"/></svg><span><strong>安全处理</strong><small>迁移前自动创建备份索引</small></span></div>
+    </section>
     <section id="status" class="status panel hidden" aria-live="polite">
       <div class="status-heading"><div class="step">2</div><div><div class="status-line"><span class="status-dot"></span><strong id="statusText">准备中</strong></div><small id="taskType"></small></div></div>
       <dl><div><dt>已扫描名称</dt><dd id="scanned">0</dd><span>扫描进度</span></div><div><dt>重复名称</dt><dd id="groupCount">0</dd><span>候选分组</span></div><div><dt>涉及知识</dt><dd id="entityCount">0</dd><span>待核查记录</span></div></dl>
+    </section>
+    <section id="processPanel" class="process-panel panel hidden" aria-live="polite">
+      <div class="process-copy"><div class="step">3</div><div><h2>处理重复知识</h2><p>先创建与原索引 mapping 一致的空备份索引，再将选举失败的数据安全迁移。</p><div class="election-rules"><span><i>1</i>所有 Q 开头的 Wikidata 知识直接保留</span><span><i>2</i>其他知识按数据大小选出最完整的一条</span><span><i>3</i>其余知识备份成功后从原索引移除</span></div></div></div>
+      <div class="process-action"><button id="process" class="danger-action"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 11v5M15 11v5M7 7l1 13h8l1-13M9 7l1-3h4l1 3"/></svg><span>开始安全处理</span></button><small id="processHint">此操作会改变原索引，请确认后执行</small></div>
+      <div id="processResult" class="process-result hidden"><div><span>备份索引</span><strong id="backupIndex">—</strong></div><div><span>已处理分组</span><strong id="processedGroups">0</strong></div><div><span>保留知识</span><strong id="keptEntities">0</strong></div><div><span>已迁移知识</span><strong id="movedEntities">0</strong></div></div>
     </section>
     <section id="results" class="results hidden">
       <div class="section-title"><div><span class="eyebrow">检测结果</span><h2>重复候选</h2><p>名称相同仅代表重复候选，请查看详情后人工判断。</p></div><span id="total" class="total-pill"></span></div>
       <div class="table-wrap panel"><table><thead><tr><th>中文名称</th><th class="number">重复数量</th><th class="action"><span class="sr-only">操作</span></th></tr></thead><tbody id="groups"></tbody></table><div id="empty" class="empty hidden"><span class="empty-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v14H4zM8 3h8v3M8 11h8M8 15h5"/></svg></span><strong>未发现重复名称</strong><p>当前类型的数据质量看起来不错</p></div></div>
       <div class="pagination"><button id="prev"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>上一页</button><span id="pageInfo"></span><button id="next">下一页<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button></div>
+    </section>
     </section>
   </main>
   <div id="drawerMask" class="mask hidden"></div>
@@ -48,6 +57,22 @@
     <div id="detailList" class="detail-list"></div>
     <div class="pagination detail-page"><button id="detailPrev"><svg viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg>上一页</button><span id="detailPageInfo"></span><button id="detailNext">下一页<svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></button></div>
   </aside>
+  <div id="reportMask" class="report-mask hidden"></div>
+  <section id="reportModal" class="report-modal hidden" role="dialog" aria-modal="true" aria-labelledby="reportTitle">
+    <header class="report-head"><div><small>PROCESSING AUDIT</small><h2 id="reportTitle">重复知识处理报告</h2><p>查看历史处理任务、选举结果与数据迁移记录</p></div><button id="reportClose" class="icon" aria-label="关闭处理报告"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header>
+    <div class="report-layout">
+      <aside class="record-sidebar"><div class="record-title">处理记录 <span id="recordCount">0</span></div><div id="recordList" class="record-list"></div></aside>
+      <main class="report-content">
+        <div id="reportEmpty" class="report-empty">暂无处理记录</div>
+        <div id="reportView" class="hidden">
+          <div class="report-meta"><div><span id="reportStatus" class="report-status"></span><h3 id="reportTaskType"></h3><p id="reportIndex"></p></div><time id="reportTime"></time></div>
+          <div class="report-stats"><div><span>处理分组</span><strong id="reportGroups">0</strong></div><div><span>保留知识</span><strong id="reportKept">0</strong></div><div><span>迁移知识</span><strong id="reportMoved">0</strong></div><div><span>备份索引</span><strong id="reportBackup">—</strong></div></div>
+          <section class="report-chart"><div class="chart-heading"><div><h3>处理结果构成</h3><p>保留与迁移知识的数量占比</p></div><strong id="reportRate">0%</strong></div><div class="outcome-bar" role="img" aria-label="保留与迁移知识比例"><span id="keptBar"></span><span id="movedBar"></span></div><div class="chart-legend"><span><i class="kept"></i>保留 <strong id="keptLegend">0</strong></span><span><i class="moved"></i>迁移备份 <strong id="movedLegend">0</strong></span></div></section>
+          <section class="group-report"><div class="group-report-head"><h3>分组选举明细</h3><span id="reportGroupTotal"></span></div><div id="reportGroupsList"></div><div class="pagination report-pagination"><button id="reportPrev">上一页</button><span id="reportPageInfo"></span><button id="reportNext">下一页</button></div></section>
+        </div>
+      </main>
+    </div>
+  </section>
   <script type="module" src="/app.js"></script>
 </body>
 </html>

@@ -44,5 +44,9 @@ bun run start
 - `GET /api/dedup/tasks/:taskId`：任务状态及统计
 - `GET /api/dedup/tasks/:taskId/groups?page=1&pageSize=20`：重复名称候选
 - `GET /api/dedup/tasks/:taskId/entities?name=张三&page=1&pageSize=20`：候选知识详情
+- `POST /api/dedup/tasks/:taskId/process`：检测完成后执行安全处理；创建同 mapping 的备份索引，保留所有 `id` 以 `Q` 开头的知识，并在其他知识中保留 `_source` JSON 字节数最大的一条，其余知识先备份再从原索引移除
+- `GET /api/dedup/process-records`：最近 100 条处理任务记录
+- `GET /api/dedup/tasks/:taskId/report?page=1&pageSize=20`：处理报告汇总及逐组选举明细
 
 服务启动时会自动恢复 `pending` 或 `running` 状态的任务。扫描请求严格串行翻页，并在同一事务中保存候选、统计和 `after_key` 断点。
+处理任务也会记录逐组进度。只有备份写入成功后才会删除原索引中的对应知识；服务中断后可继续未完成的分组。

@@ -1,5 +1,5 @@
 const $ = (id) => document.getElementById(id);
-const state = { taskId: localStorage.getItem("dedupTaskId"), types: [], filteredTypes: [], page: 1, pageSize: 20, total: 0, detailName: "", detailPage: 1, detailTotal: 0, poll: null };
+const state = { taskId: localStorage.getItem("dedupTaskId"), task: null, types: [], filteredTypes: [], page: 1, pageSize: 20, total: 0, detailName: "", detailPage: 1, detailTotal: 0, reportRecords: [], reportTaskId: "", reportPage: 1, reportTotal: 0, poll: null };
 const fmt = (n) => new Intl.NumberFormat("zh-CN").format(n || 0);
 const text = (value) => value === undefined || value === null || value === "" ? "—" : Array.isArray(value) ? value.join("、") : String(value);
 async function request(url, options) { const r = await fetch(url, options); const data = await r.json().catch(() => ({})); if (!r.ok) throw new Error(data.error || "请求失败"); return data; }
@@ -53,16 +53,74 @@ async function poll() {
   if (!state.taskId) return;
   clearTimeout(state.poll);
   try {
-    const task = await request(`/api/dedup/tasks/${state.taskId}`);
+    const task = await request(`/api/dedup/tasks/${state.taskId}`); state.task = task;
     $("status").classList.remove("hidden", "failed", "completed"); $("status").classList.add(task.status);
     const labels = { pending: "等待检测", running: "正在检测", completed: "检测完成", failed: "检测失败" };
     $("statusText").textContent = labels[task.status] || task.status; $("taskType").textContent = `索引：${task.esIndex} · 类型：${task.type}`;
     $("scanned").textContent = fmt(task.scannedNameCount); $("groupCount").textContent = fmt(task.duplicateGroupCount); $("entityCount").textContent = fmt(task.duplicateEntityCount);
+    renderProcessing(task);
     if (task.status === "failed") notice(task.error || "检测任务失败");
-    if (task.status === "running" || task.status === "pending") state.poll = setTimeout(poll, 1500);
+    if (task.status === "running" || task.status === "pending" || task.processing?.status === "running") state.poll = setTimeout(poll, 1500);
     await loadGroups();
   } catch (e) { notice(e.message); }
 }
+function renderProcessing(task) {
+  const visible = task.status === "completed" && task.duplicateGroupCount > 0;
+  $("processPanel").classList.toggle("hidden", !visible);
+  if (!visible) return;
+  const process = task.processing ?? {};
+  const running = process.status === "running"; const done = process.status === "completed";
+  $("processPanel").classList.toggle("processing", running); $("processPanel").classList.toggle("done", done);
+  $("process").disabled = running || done; setButtonLabel("process", running ? "正在安全处理…" : done ? "处理已完成" : process.status === "failed" ? "重试处理" : "开始安全处理");
+  $("processHint").textContent = process.status === "failed" ? `处理失败：${process.error}` : done ? "选举和迁移已安全完成" : running ? "请勿关闭服务，处理中断后可继续" : "此操作会改变原索引，请确认后执行";
+  const showResult = Boolean(process.backupIndex || running || done || process.status === "failed");
+  $("processResult").classList.toggle("hidden", !showResult);
+  $("backupIndex").textContent = process.backupIndex || "正在创建…"; $("processedGroups").textContent = fmt(process.processedGroupCount);
+  $("keptEntities").textContent = fmt(process.keptEntityCount); $("movedEntities").textContent = fmt(process.movedEntityCount);
+}
+async function processDuplicates() {
+  if (!state.task || !confirm(`即将处理索引“${state.task.esIndex}”中的重复知识。\n\n系统会先创建备份索引；备份写入成功后，选举失败的知识将从原索引移除。是否继续？`)) return;
+  notice(""); $("process").disabled = true; setButtonLabel("process", "正在启动…");
+  try { await request(`/api/dedup/tasks/${state.taskId}/process`, { method: "POST" }); await poll(); }
+  catch (e) { notice(e.message); $("process").disabled = false; setButtonLabel("process", "重试处理"); }
+}
+function reportDate(value) {
+  if (!value) return "处理中";
+  return new Intl.DateTimeFormat("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).format(new Date(value));
+}
+async function openReports() {
+  $("reportMask").classList.remove("hidden"); $("reportModal").classList.remove("hidden");
+  $("reportEmpty").classList.remove("hidden"); $("reportEmpty").textContent = "正在加载处理记录…"; $("reportView").classList.add("hidden");
+  try {
+    const data = await request("/api/dedup/process-records"); state.reportRecords = data.items; $("recordCount").textContent = fmt(data.items.length);
+    $("recordList").innerHTML = data.items.map((item, index) => `<button class="record-item" data-record-index="${index}"><strong>${escapeHtml(item.type)}</strong><span>${escapeHtml(item.esIndex)} · ${fmt(item.processing.movedEntityCount)} 条已迁移</span><small>${reportDate(item.processing.processedAt ?? item.createdAt)}</small></button>`).join("") || '<div class="type-empty">暂无处理记录</div>';
+    if (!data.items.length) { $("reportEmpty").textContent = "暂无处理记录"; return; }
+    const initial = data.items.find((item) => item.taskId === state.taskId) ?? data.items[0]; await loadReport(initial.taskId, 1);
+  } catch (e) { $("reportEmpty").textContent = `处理记录加载失败：${e.message}`; }
+}
+async function loadReport(taskId, page = 1) {
+  state.reportTaskId = taskId; state.reportPage = page;
+  const data = await request(`/api/dedup/tasks/${taskId}/report?page=${page}&pageSize=12`); const process = data.task.processing;
+  state.reportTotal = data.total; $("reportEmpty").classList.add("hidden"); $("reportView").classList.remove("hidden");
+  for (const item of $("recordList").querySelectorAll(".record-item")) item.classList.toggle("active", state.reportRecords[Number(item.dataset.recordIndex)]?.taskId === taskId);
+  const statusLabels = { completed: "处理完成", running: "处理中", failed: "处理失败" };
+  $("reportStatus").textContent = statusLabels[process.status] || "等待处理"; $("reportTaskType").textContent = `${data.task.type} · 重复知识处理`;
+  $("reportIndex").textContent = `源索引：${data.task.esIndex}`; $("reportTime").textContent = reportDate(process.processedAt ?? data.task.createdAt);
+  $("reportGroups").textContent = fmt(process.processedGroupCount); $("reportKept").textContent = fmt(process.keptEntityCount); $("reportMoved").textContent = fmt(process.movedEntityCount); $("reportBackup").textContent = process.backupIndex || "—";
+  const outcomeTotal = process.keptEntityCount + process.movedEntityCount; const keptRate = outcomeTotal ? process.keptEntityCount / outcomeTotal * 100 : 0;
+  $("reportRate").textContent = `${keptRate.toFixed(1)}% 保留`; $("keptBar").style.width = `${keptRate}%`; $("movedBar").style.width = `${100 - keptRate}%`;
+  $("keptLegend").textContent = fmt(process.keptEntityCount); $("movedLegend").textContent = fmt(process.movedEntityCount); $("reportGroupTotal").textContent = `共 ${fmt(data.total)} 组`;
+  $("reportGroupsList").innerHTML = data.groups.map((group) => {
+    const decisions = [
+      ...group.details.wikidata.map((item) => `<span class="decision wikidata">Wikidata 保留 · ${escapeHtml(item.id)}</span>`),
+      ...group.details.elected.map((item) => `<span class="decision">选举保留 · ${escapeHtml(item.id)} · ${fmt(item.sourceBytes)} B</span>`),
+      ...group.details.moved.map((item) => `<span class="decision removed">迁移 · ${escapeHtml(item.id)} · ${fmt(item.sourceBytes)} B</span>`),
+    ].join("") || '<span class="decision">历史记录无明细</span>';
+    return `<article class="report-group"><strong>${escapeHtml(group.name)}</strong><div class="report-counts">保留 ${fmt(group.keptCount)}<span class="moved-text">迁移 ${fmt(group.movedCount)}</span></div><div class="report-decisions">${decisions}</div></article>`;
+  }).join("") || '<div class="type-empty">暂无分组处理明细</div>';
+  const pages = Math.max(1, Math.ceil(data.total / 12)); $("reportPageInfo").textContent = `${page} / ${pages}`; $("reportPrev").disabled = page <= 1; $("reportNext").disabled = page >= pages;
+}
+function closeReports() { $("reportMask").classList.add("hidden"); $("reportModal").classList.add("hidden"); }
 async function loadGroups() {
   if (!state.taskId) return;
   const data = await request(`/api/dedup/tasks/${state.taskId}/groups?page=${state.page}&pageSize=${state.pageSize}`);
@@ -85,6 +143,10 @@ async function loadDetail() {
 function closeDetail() { $("drawerMask").classList.add("hidden"); $("drawer").classList.remove("open"); $("drawer").setAttribute("aria-hidden", "true"); }
 function escapeHtml(value) { const d = document.createElement("div"); d.textContent = String(value); return d.innerHTML; }
 $("start").addEventListener("click", start);
+$("process").addEventListener("click", processDuplicates);
+$("history").addEventListener("click", openReports); $("reportClose").addEventListener("click", closeReports); $("reportMask").addEventListener("click", closeReports);
+$("recordList").addEventListener("click", (event) => { const item = event.target.closest("[data-record-index]"); if (item) loadReport(state.reportRecords[Number(item.dataset.recordIndex)].taskId, 1); });
+$("reportPrev").addEventListener("click", () => loadReport(state.reportTaskId, state.reportPage - 1)); $("reportNext").addEventListener("click", () => loadReport(state.reportTaskId, state.reportPage + 1));
 $("typeTrigger").addEventListener("click", () => $("typeDropdown").classList.contains("hidden") ? openTypeDropdown() : closeTypeDropdown());
 $("typeSearch").addEventListener("input", renderTypes);
 $("typeOptions").addEventListener("click", (event) => { const option = event.target.closest("[data-type-index]"); if (option) selectType(state.filteredTypes[Number(option.dataset.typeIndex)]); });
@@ -94,7 +156,7 @@ $("prev").addEventListener("click", () => { state.page--; loadGroups(); }); $("n
 $("groups").addEventListener("click", (e) => { const button = e.target.closest("[data-name]"); if (button) openDetail(button.dataset.name); });
 $("close").addEventListener("click", closeDetail); $("drawerMask").addEventListener("click", closeDetail);
 document.addEventListener("click", (event) => { if (!$("typeCombobox").contains(event.target)) closeTypeDropdown(); });
-document.addEventListener("keydown", (event) => { if (event.key === "Escape") { if (!$("typeDropdown").classList.contains("hidden")) { closeTypeDropdown(); $("typeTrigger").focus(); } else if ($("drawer").classList.contains("open")) closeDetail(); } });
+document.addEventListener("keydown", (event) => { if (event.key === "Escape") { if (!$("reportModal").classList.contains("hidden")) closeReports(); else if (!$("typeDropdown").classList.contains("hidden")) { closeTypeDropdown(); $("typeTrigger").focus(); } else if ($("drawer").classList.contains("open")) closeDetail(); } });
 $("detailPrev").addEventListener("click", () => { state.detailPage--; loadDetail(); }); $("detailNext").addEventListener("click", () => { state.detailPage++; loadDetail(); });
 async function init() {
   try {
