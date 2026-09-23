@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="面向 Elasticsearch entity 索引的重复知识候选检测工具">
+  <title>重复知识检测 · DataLens</title>
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="DataLens 首页"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M7 5.5h10M7 12h10M7 18.5h6"/><circle cx="5" cy="5.5" r="1"/><circle cx="5" cy="12" r="1"/><circle cx="5" cy="18.5" r="1"/></svg></span><span><strong>DataLens</strong><small>知识质量工作台</small></span></a>
+    <div class="topbar-meta"><span class="environment"><i></i>本地环境</span><span class="divider"></span><span>知识治理</span></div>
+  </header>
+  <main>
+    <section class="page-heading">
+      <div><div class="breadcrumb">质量检测 <span>/</span> 重复知识</div><h1>重复知识检测</h1><p>定位同一知识类型下中文名称完全相同的候选项，帮助你更高效地完成数据核查。</p></div>
+      <div class="safe-note"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 5 6v5c0 4.6 2.9 8.1 7 10 4.1-1.9 7-5.4 7-10V6l-7-3Z"/><path d="m9 12 2 2 4-4"/></svg><span><strong>只读检测</strong><small>不会修改或删除知识</small></span></div>
+    </section>
+    <section class="panel config-panel">
+      <div class="panel-heading"><div class="step">1</div><div><h2>配置检测范围</h2><p>连接 Elasticsearch，选择要检测的知识类型</p></div><span id="connectionState" class="connection-state"><i></i>等待连接</span></div>
+      <div class="config">
+        <div class="field field-url"><label for="esUrl">Elasticsearch 地址</label><div class="input-wrap"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3A1.7 1.7 0 0 0 10 3v-.2h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"/></svg><input id="esUrl" type="url" placeholder="http://127.0.0.1:9200" autocomplete="off"></div></div>
+        <div class="field field-index"><label for="esIndex">索引名称</label><input id="esIndex" placeholder="entity" autocomplete="off"></div>
+        <button id="connect" class="secondary"><span>连接并加载类型</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
+        <div class="config-separator"></div>
+        <div class="field field-type"><label for="type">知识类型</label><select id="type" disabled><option>请先连接 ES</option></select><small id="typeCount">—</small></div>
+        <div class="field"><label>检测字段</label><div class="readonly"><span>中文名称</span><code>zhLabel.keyword</code></div></div>
+        <div class="field"><label>匹配规则</label><div class="readonly"><span>完全相同</span><span class="rule-badge">精确</span></div></div>
+        <button id="start" class="primary" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 11 7-11 7V5Z"/></svg><span>开始检测</span></button>
+      </div>
+    </section>
+    <div id="message" class="message hidden" role="alert"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v6M12 17h.01"/></svg><span></span></div>
+    <section id="status" class="status panel hidden" aria-live="polite">
+      <div class="status-heading"><div class="step">2</div><div><div class="status-line"><span class="status-dot"></span><strong id="statusText">准备中</strong></div><small id="taskType"></small></div></div>
+      <dl><div><dt>已扫描名称</dt><dd id="scanned">0</dd><span>扫描进度</span></div><div><dt>重复名称</dt><dd id="groupCount">0</dd><span>候选分组</span></div><div><dt>涉及知识</dt><dd id="entityCount">0</dd><span>待核查记录</span></div></dl>
+    </section>
+    <section id="results" class="results hidden">
+      <div class="section-title"><div><span class="eyebrow">检测结果</span><h2>重复候选</h2><p>名称相同仅代表重复候选，请查看详情后人工判断。</p></div><span id="total" class="total-pill"></span></div>
+      <div class="table-wrap panel"><table><thead><tr><th>中文名称</th><th class="number">重复数量</th><th class="action"><span class="sr-only">操作</span></th></tr></thead><tbody id="groups"></tbody></table><div id="empty" class="empty hidden"><span class="empty-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v14H4zM8 3h8v3M8 11h8M8 15h5"/></svg></span><strong>未发现重复名称</strong><p>当前类型的数据质量看起来不错</p></div></div>
+      <div class="pagination"><button id="prev"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>上一页</button><span id="pageInfo"></span><button id="next">下一页<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button></div>
+    </section>
+  </main>
+  <div id="drawerMask" class="mask hidden"></div>
+  <aside id="drawer" class="drawer" aria-hidden="true" aria-label="重复候选详情">
+    <div class="drawer-head"><div><small>重复候选详情</small><h2 id="detailName"></h2><p id="detailTotal"></p></div><button id="close" class="icon" aria-label="关闭详情"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div>
+    <div class="detail-tip"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>请结合 ID、分类、领域和来源信息判断是否为同一条知识。</div>
+    <div id="detailList" class="detail-list"></div>
+    <div class="pagination detail-page"><button id="detailPrev"><svg viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg>上一页</button><span id="detailPageInfo"></span><button id="detailNext">下一页<svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></button></div>
+  </aside>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

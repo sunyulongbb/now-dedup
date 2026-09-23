@@ -1,0 +1,51 @@
+{
+  "settings": {
+    "number_of_shards": 1,
+    "number_of_replicas": 0
+  },
+  "mappings": {
+    "date_detection": false,
+    "properties": {
+      "id": {
+        "type": "keyword"
+      },
+      "zhLabel": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 1024
+          }
+        }
+      },
+      "type": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      },
+      "types": {
+        "type": "keyword",
+        "ignore_above": 256
+      },
+      "category": {
+        "type": "keyword",
+        "ignore_above": 256
+      },
+      "domain": {
+        "type": "keyword",
+        "ignore_above": 256
+      },
+      "geneSource": {
+        "type": "keyword",
+        "ignore_above": 256
+      },
+      "zhDesc": {
+        "type": "text"
+      }
+    }
+  }
+}
