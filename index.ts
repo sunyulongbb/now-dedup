@@ -386,6 +386,7 @@ async function api(request: Request, url: URL): Promise<Response> {
 }
 
 const server = serve({
+  hostname: "0.0.0.0",
   port: config.port,
   async fetch(request) {
     const url = new URL(request.url);

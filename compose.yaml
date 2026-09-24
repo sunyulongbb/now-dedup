@@ -1,0 +1,31 @@
+services:
+  app:
+    image: now-dedup:1.0.0
+    build: .
+    restart: unless-stopped
+    init: true
+    ports:
+      - "${APP_BIND_ADDRESS:-127.0.0.1}:${APP_PORT:-3000}:3000"
+    environment:
+      PORT: "3000"
+      DEDUP_DB_PATH: /app/data/dedup.sqlite
+      ES_URL: ${ES_URL:-http://host.docker.internal:9200}
+      ES_INDEX: ${ES_INDEX:-entity}
+      ES_USERNAME: ${ES_USERNAME:-}
+      ES_PASSWORD: ${ES_PASSWORD:-}
+      ES_TYPE_FIELD: ${ES_TYPE_FIELD:-type.keyword}
+      ES_NAME_FIELD: ${ES_NAME_FIELD:-zhLabel.keyword}
+      DEDUP_BATCH_SIZE: ${DEDUP_BATCH_SIZE:-5000}
+      ES_MAX_CONCURRENCY: ${ES_MAX_CONCURRENCY:-2}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - dedup-data:/app/data
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  dedup-data:
